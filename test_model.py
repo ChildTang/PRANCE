@@ -539,8 +539,6 @@ def main(args):
         print("Start evaluation!!!")
         print("*" * 60)
 
-        # model.init_PPO_selector(batch_size=args.batch_size, max_flag=True)
-
         batch_acc_list = []
         batch_flops_list = []
         batch_param_list = []
@@ -597,24 +595,12 @@ def main(args):
 
 
 if __name__ == "__main__":
-    # 查看gpu使用
-    # ailab_gpu_usage
-    # 运行命令
-    # sbatch -N 1 --gres=gpu:1 -p vip_gpu_ailab -A ai4bio ./test_A100.sh
-    # sbatch -N 1 --gres=gpu:1 -p vip_gpu_ailab -A ai4multi ./test.sh
-    # 查看运行脚本
-    # tail -f slurm-
-    # 查看gpu情况
-    # watch parajobs
-    # squeue
-
     parser = argparse.ArgumentParser(
         "Prance training and evaluation script", parents=[get_args_parser()]
     )
     args = parser.parse_args()
 
     # need to be changed
-    # args.data_path = "/home/data/imagenet"
     args.data_path = "/home/bingxing2/public/imagenet2012/ImageNet_ILSVRC2012"
 
     args.output_dir = args.output_dir + "/" + args.ppo_name
