@@ -536,10 +536,11 @@ class Vision_TransformerSuper(nn.Module):
                     block_num=i,
                 )
 
-                if self.is_batch_inference:
-                    self.set_sample_config_batch(config, B)
-                else:
-                    self.set_sample_config(config)
+                if self.is_dynamic_model:
+                    if self.is_batch_inference:
+                        self.set_sample_config_batch(config, B)
+                    else:
+                        self.set_sample_config(config)
             ################################################################################
 
             sample_dropout = calc_dropout(
