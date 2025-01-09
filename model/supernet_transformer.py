@@ -239,7 +239,7 @@ class Vision_TransformerSuper(nn.Module):
     
     @property
     def is_batch_inference(self):
-        return (self.mask_training and not self.training)
+        return (not self.mask_training and not self.training)
     
     def disable_selector(self):
         def _disabler(m):
