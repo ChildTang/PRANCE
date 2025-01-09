@@ -110,3 +110,4 @@ token_mode="prune"
 ###################################################################################
 
 python -u test_model.py --output_dir $output_name --ppo_path $ppo_path --ppo_name $ppo --cfg $cfg --token_mode $token_mode --num_workers 8 --batch-size $batch_size
+# python -u test_model.py --output_dir $output_name --ppo_path $ppo_path --ppo_name $ppo --cfg $cfg --token_mode $token_mode --num_workers 8 --batch-size $batch_size --batch-inference
