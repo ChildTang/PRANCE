@@ -87,6 +87,9 @@ checkpoints/
 ```
 
 ## 3. Usage
+### Train
+
+This part will be released soon.
 
 ### Test
 
