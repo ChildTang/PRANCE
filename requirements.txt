@@ -1,0 +1,17 @@
+# numpy==1.26.4
+# torch==1.7.1
+# torchvision==0.2.1
+# timm==0.4.12
+# nvidia-dali-cuda120==1.31.0
+
+# torch
+# torchvision
+timm
+scikit-image
+ptflops
+easydict
+PyYAML
+pillow
+opencv-python
+matplotlib
+brewer2mpl
