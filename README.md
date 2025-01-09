@@ -90,7 +90,7 @@ checkpoints/
 
 ### Test
 
-You can test the model by run the test.sh, and change the settings as you need:
+You can test the model by running the test.sh, and change the settings in the test.sh file as you need:
 
 ```
 sh test.sh
