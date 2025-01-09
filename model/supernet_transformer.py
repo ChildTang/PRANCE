@@ -18,7 +18,7 @@ from .utils import (
     _check_is_token_pruning, 
     _check_is_token_pruning_then_merging
     )
-from ppo_sbs import PPO
+from .ppo_sbs import PPO
 
 def sample_configs(choices, batch_size, sample_max=False):
     sample_max = False

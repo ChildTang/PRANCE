@@ -34,7 +34,7 @@ import numpy as np
 from PIL import Image
 from functools import partial
 
-from aa import AutoaugmentImageNetPolicy
+from .aa import AutoaugmentImageNetPolicy
 
 DATA_BACKEND_CHOICES = ["pytorch", "synthetic"]
 try:

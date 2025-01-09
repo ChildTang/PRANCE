@@ -12,7 +12,7 @@ from lib.datasets import build_dataset
 from lib import utils
 from lib.config import supernet_cfg, update_config_from_file
 from model.supernet_transformer import Vision_TransformerSuper
-from dataloader import *
+from lib.dataloader import *
 
 
 def get_args_parser():

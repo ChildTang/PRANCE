@@ -10,8 +10,8 @@ from lib import utils
 import random
 import time
 import numpy as np
-from dataloader import *
-from mixup import NLLMultiLabelSmooth, MixUpWrapper
+from lib.dataloader import *
+from lib.mixup import NLLMultiLabelSmooth, MixUpWrapper
 
 
 def sample_configs(choices, op=random.choice):
