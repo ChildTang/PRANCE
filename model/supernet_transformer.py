@@ -13,13 +13,12 @@ import numpy as np
 import copy
 import random
 from .utils import (
-    _map_token_mode,
-    _check_is_token_merging,
-    _check_is_token_pruning,
-    _check_is_token_pruning_then_merging,
-)
+    _map_token_mode, 
+    _check_is_token_merging, 
+    _check_is_token_pruning, 
+    _check_is_token_pruning_then_merging
+    )
 from ppo_sbs import PPO
-
 
 def sample_configs(choices, batch_size, sample_max=False):
     sample_max = False
@@ -131,7 +130,7 @@ class Vision_TransformerSuper(nn.Module):
         abs_pos=True,
         max_relative_position=14,
         mask_training=False,
-        token_mode_str="pruning",
+        token_mode_str='pruning'
     ):
         super(Vision_TransformerSuper, self).__init__()
 
@@ -167,12 +166,18 @@ class Vision_TransformerSuper(nn.Module):
         dpr = [
             x.item() for x in torch.linspace(0, drop_path_rate, depth)
         ]  # stochastic depth decay rule
-
-        self.decision_loc = []
+        
+        N = 3
+        decision_loc, linear_mapping_loc = [], []
+        for i in range(depth):
+            if i != 0 and i != depth-1 and i % N == 0:
+                decision_loc.append(i)
+            if (i + 1) % N == 0 and i != depth-1:
+                linear_mapping_loc.append(i)
+        
+        self.decision_loc = decision_loc
 
         for i in range(depth):
-            if i != 0 and i != depth - 1 and i % 3 == 0:
-                self.decision_loc.append(i)
 
             self.blocks.append(
                 TransformerEncoderLayer(
@@ -191,6 +196,8 @@ class Vision_TransformerSuper(nn.Module):
                     max_relative_position=max_relative_position,
                     id=i,
                     token_mode=self.token_mode,
+                    decision_loc=decision_loc,
+                    linear_mapping_loc=linear_mapping_loc
                 )
             )
 
@@ -218,17 +225,36 @@ class Vision_TransformerSuper(nn.Module):
         self.iterator = None
         self.cfg = cfg
 
-        # PPO initialization
+        # PPO initialization        
         self.selector = None
-
+        self.use_selector = False
+        
+    @property
+    def is_dynamic_model(self):
+        return self.use_selector
+    
     @property
     def token_optim_mode(self):
         return self.token_mode
-
+    
     @property
     def is_batch_inference(self):
-        return self.mask_training and self.training
-
+        return (self.mask_training and not self.training)
+    
+    def disable_selector(self):
+        def _disabler(m):
+            if hasattr(m, 'use_selector'):
+                m.use_selector = False
+        
+        self.apply(_disabler)
+    
+    def enable_selector(self):
+        def _enabler(m):
+            if hasattr(m, 'use_selector'):
+                m.use_selector = True
+        
+        self.apply(_enabler)
+    
     def do_batch_inference(self):
         assert not self.training
         self.mask_training = False
@@ -236,27 +262,25 @@ class Vision_TransformerSuper(nn.Module):
     def do_masking_training(self):
         assert self.training
         self.mask_training = True
-
+    
     def init_PPO_selector(
         self,
         batch_size,
         min_flag=False,
         max_flag=False,
-        special_flag=False,
-        state_dim=197,
-        hidden_dim=256,
-        gamma=0.9,
-        lmbda=0.9,
-        epochs=10,
-        eps=0.2,
-        actor_lr=1e-4,
-        total_train_step=8000,
+        special_flag=False, 
+        state_dim=197, 
+        hidden_dim=256, 
+        gamma=0.9, 
+        lmbda=0.9, 
+        epochs=10, 
+        eps=0.2, 
+        actor_lr=1e-4, 
+        total_train_step=8000
     ):
         critic_lr = 50 * actor_lr
 
-        if _check_is_token_pruning(self.token_optim_mode) or _check_is_token_merging(
-            self.token_optim_mode
-        ):
+        if _check_is_token_pruning(self.token_optim_mode) or _check_is_token_merging(self.token_optim_mode):
             action_dim = 7
         elif _check_is_token_pruning_then_merging(self.token_optim_mode):
             action_dim = 8
@@ -293,25 +317,27 @@ class Vision_TransformerSuper(nn.Module):
             sample_max=False,
         )
         self.sample_config = sample_config
-
         self._sample_one_subnets(batch_size)
+        self.selector.actor.to(self.head.weight.device)
+        self.selector.critic.to(self.head.weight.device)
+        self.enable_selector()
 
         if min_flag:
-            self.init_config["mlp_ratio"][:, 0:3] = np.ones((batch_size, 3)).astype(
-                int
-            ) * min(choices["mlp_ratio"])
-            self.init_config["embed_dim"][:, 0:3] = np.ones((batch_size, 3)).astype(
-                int
-            ) * min(choices["embed_dim"])
+            self.init_config["mlp_ratio"][:, 0:3] = np.ones(
+                (batch_size, 3)
+            ).astype(int) * min(choices["mlp_ratio"])
+            self.init_config["embed_dim"][:, 0:3] = np.ones(
+                (batch_size, 3)
+            ).astype(int) * min(choices["embed_dim"])
             print("Minimum structure selected.")
 
         if max_flag:
-            self.init_config["mlp_ratio"][:, 0:3] = np.ones((batch_size, 3)).astype(
-                int
-            ) * max(choices["mlp_ratio"])
-            self.init_config["embed_dim"][:, 0:3] = np.ones((batch_size, 3)).astype(
-                int
-            ) * max(choices["embed_dim"])
+            self.init_config["mlp_ratio"][:, 0:3] = np.ones(
+                (batch_size, 3)
+            ).astype(int) * max(choices["mlp_ratio"])
+            self.init_config["embed_dim"][:, 0:3] = np.ones(
+                (batch_size, 3)
+            ).astype(int) * max(choices["embed_dim"])
             print("Maximum structure selected.")
 
         if special_flag and 216 in choices["embed_dim"]:
@@ -366,6 +392,7 @@ class Vision_TransformerSuper(nn.Module):
             )
 
     def set_sample_config_batch(self, config: dict, batch=64):
+        # TODO: 未完成
         if "prune_granularity" in config:
 
             def avg_decision_across_batch(x, cfg=None):
@@ -435,7 +462,7 @@ class Vision_TransformerSuper(nn.Module):
 
         return result
 
-    def get_complexity(self, sequence_length=14 * 14):
+    def get_complexity(self, sequence_length=14*14):
         total_flops = self.patch_embed_super.get_complexity(sequence_length)
 
         zoom_ration = self.sample_embed_dim[:, 0] / self.super_embed_dim
@@ -459,6 +486,7 @@ class Vision_TransformerSuper(nn.Module):
         else:
             self.set_sample_config(config)
 
+        # TODO: 未完成
         x = self.patch_embed_super(
             x, self.sample_embed_dim[:, 0], batch_inference=self.is_batch_inference
         )
@@ -554,6 +582,9 @@ class Vision_TransformerSuper(nn.Module):
         self.original_token_idx = original_token_idx
         self.batch_config = config  # for testing
 
+        # TODO:待删除
+        # print("最终剩余的token比例为:", x.shape[1] / 197)
+
         return x[:, 0]
 
     def forward(self, x):
@@ -595,6 +626,8 @@ class TransformerEncoderLayer(nn.Module):
         max_relative_position=14,
         id=0,
         token_mode=None,
+        decision_loc=None,
+        linear_mapping_loc=None
     ):
         super().__init__()
 
@@ -654,13 +687,20 @@ class TransformerEncoderLayer(nn.Module):
             super_out_dim=self.super_embed_dim,
         )
 
-        if (id + 1) % 3 == 0 and id != 11:
+        if id in linear_mapping_loc:
             self.lln = LinearSuper(
                 super_in_dim=self.super_embed_dim, super_out_dim=self.super_embed_dim
             )
         else:
             self.lln = nn.Identity()
+        
+        self.decision_loc = decision_loc
+        self.use_selector = False
 
+    @property
+    def is_dynamic_model(self):
+        return self.use_selector
+    
     def set_sample_config(
         self,
         is_identity_layer,
@@ -711,9 +751,6 @@ class TransformerEncoderLayer(nn.Module):
             # Calculate the number of tokens to keep in each batch
             kept_number = (merge_granularity * token_length_before).astype(int)[0]
 
-            if kept_number == 0:
-                return lambda x, mode="mean": x, 0
-
             metric = metric / metric.norm(dim=-1, keepdim=True)
             unimportant_tokens_metric = metric[:, kept_number:]
 
@@ -731,9 +768,6 @@ class TransformerEncoderLayer(nn.Module):
             dst_idx = node_idx[..., None]
 
         def batch_merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
-            if kept_number == 0:
-                return x
-
             src = x[:, kept_number:]
             dst = x[:, :kept_number]
             n, t1, c = src.shape
@@ -910,6 +944,9 @@ class TransformerEncoderLayer(nn.Module):
             self.token_mask = token_mask
             self.token_size = token_size
 
+        # print("检查")
+        # print("self.id: ", self.id)
+
         residual = x
         x = self.maybe_layer_norm(
             self.attn_layer_norm,
@@ -946,7 +983,7 @@ class TransformerEncoderLayer(nn.Module):
             array = [[i for i in range(x.shape[1])] for _ in range(x.shape[0])]
             self.original_token_idx = torch.tensor(array).to("cuda")
 
-        elif self.id % 3 != 0:
+        elif self.id not in self.decision_loc:
             self.token_length_before = token_length
             self.token_length_after = self.token_length_before
 
@@ -959,87 +996,86 @@ class TransformerEncoderLayer(nn.Module):
             ###############################################################################
             # Calculate the importance of tokens to cls, measured using the attention matrix
             # The dimension of cls_attn：[B, sample_num_heads, N, N]
-            cls_attn = attn[:, :, 0, 1:]
-            cls_attn = cls_attn.mean(dim=1)  # [B, N-1]
-            _, idx = torch.sort(
-                cls_attn, descending=True
-            )  # The dimension of idx: [B, N-1]
+            
+            if self.is_dynamic_model:
+            
+                cls_attn = attn[:, :, 0, 1:]
+                cls_attn = cls_attn.mean(dim=1)  # [B, N-1]
+                _, idx = torch.sort(
+                    cls_attn, descending=True
+                )  # The dimension of idx: [B, N-1]
 
-            self.original_token_idx = self.gather_vectors_by_index(
-                self.original_token_idx, idx
-            )
+                self.original_token_idx = self.gather_vectors_by_index(
+                    self.original_token_idx, idx
+                )
 
-            cls_index = torch.zeros((B, 1), device=idx.device).long()
-            # Set the importance of cls_token to the highest
-            idx = torch.cat((cls_index, idx + 1), dim=1)
+                cls_index = torch.zeros((B, 1), device=idx.device).long()
+                # Set the importance of cls_token to the highest
+                idx = torch.cat((cls_index, idx + 1), dim=1)
 
-            # Sort tokens by importance
-            x = torch.gather(
-                x, dim=1, index=idx.unsqueeze(-1).expand(-1, -1, x.shape[-1])
-            )
-            # token_size also needs to be sorted by importance
-            self.token_size = torch.gather(
-                self.token_size, dim=1, index=idx.unsqueeze(-1)
-            )
+                # Sort tokens by importance
+                x = torch.gather(
+                    x, dim=1, index=idx.unsqueeze(-1).expand(-1, -1, x.shape[-1])
+                )
+                # token_size also needs to be sorted by importance
+                self.token_size = torch.gather(
+                    self.token_size, dim=1, index=idx.unsqueeze(-1)
+                )
 
-            ###############################################################################
-            if _check_is_token_pruning(
-                self.token_mode
-            ) or _check_is_token_pruning_then_merging(self.token_mode):
-                # token pruning
-                num_tokens_to_keep = (
-                    prune_granularity * self.token_length_before
-                ).astype(int)
+                ###############################################################################
+                if _check_is_token_pruning(self.token_mode) or _check_is_token_pruning_then_merging(self.token_mode):
+                    # token pruning
+                    num_tokens_to_keep = (
+                        prune_granularity * self.token_length_before
+                    ).astype(int)
 
-                if batch_inference:
-                    x = x[:, : num_tokens_to_keep[0]]
-                    self.token_size = self.token_size[:, : num_tokens_to_keep[0]]
-                else:
-                    # add mask
-                    mask_indices = torch.arange(N).unsqueeze(0).unsqueeze(
-                        -1
-                    ) < torch.tensor(num_tokens_to_keep).unsqueeze(1).unsqueeze(2)
-                    self.token_mask = mask_indices.expand(B, N, C).float().to("cuda")
+                    if batch_inference:
+                        x = x[:, : num_tokens_to_keep[0]]
+                        self.token_size = self.token_size[:, : num_tokens_to_keep[0]]
+                    else:
+                        # add mask
+                        mask_indices = torch.arange(N).unsqueeze(0).unsqueeze(
+                            -1
+                        ) < torch.tensor(num_tokens_to_keep).unsqueeze(1).unsqueeze(2)
+                        self.token_mask = mask_indices.expand(B, N, C).float().to("cuda")
 
-                    x *= self.token_mask
+                        x *= self.token_mask
 
-                # save the token number after pruning
-                self.token_length_after = num_tokens_to_keep
+                    # save the token number after pruning
+                    self.token_length_after = num_tokens_to_keep
 
-            # connect block
-            if _check_is_token_pruning_then_merging(self.token_mode):
-                self.token_length_before = self.token_length_after
+                # connect block
+                if _check_is_token_pruning_then_merging(self.token_mode):
+                    self.token_length_before = self.token_length_after
 
-            ###############################################################################
-            if _check_is_token_merging(
-                self.token_mode
-            ) or _check_is_token_pruning_then_merging(self.token_mode):
-                if batch_inference:
-                    batch_merge, self.token_length_after = self.get_batch_merge_func(
-                        x,
-                        merge_granularity,
-                        token_length_before=self.token_length_before,
-                    )
-                    x = batch_merge(x)
-                    self.token_size = batch_merge(self.token_size, mode="sum")
-                else:
-                    # Merging
-                    (
-                        merge,
-                        size_merge,
-                        self.token_length_after,
-                        import_mask,
-                        unimport_mask,
-                    ) = self.get_merge_func(
-                        x,
-                        # re_info["k"],
-                        merge_granularity=merge_granularity,
-                        token_length_before=self.token_length_before,
-                    )
-                    x, self.token_mask = merge(x, import_mask, unimport_mask)
-                    self.token_size = size_merge(
-                        self.token_size, import_mask, unimport_mask
-                    )
+                ###############################################################################
+                if _check_is_token_merging(self.token_mode) or _check_is_token_pruning_then_merging(self.token_mode):
+                    if batch_inference:
+                        batch_merge, self.token_length_after = self.get_batch_merge_func(
+                            x,
+                            merge_granularity,
+                            token_length_before=self.token_length_before,
+                        )
+                        x = batch_merge(x)
+                        self.token_size = batch_merge(self.token_size, mode="sum")
+                    else:
+                        # Merging
+                        (
+                            merge,
+                            size_merge,
+                            self.token_length_after,
+                            import_mask,
+                            unimport_mask,
+                        ) = self.get_merge_func(
+                            x,
+                            # re_info["k"],
+                            merge_granularity=merge_granularity,
+                            token_length_before=self.token_length_before,
+                        )
+                        x, self.token_mask = merge(x, import_mask, unimport_mask)
+                        self.token_size = size_merge(
+                            self.token_size, import_mask, unimport_mask
+                        )
             ###############################################################################
         x = self.maybe_layer_norm(
             self.attn_layer_norm,
@@ -1084,10 +1120,16 @@ class TransformerEncoderLayer(nn.Module):
             x = x * (self.super_mlp_ratio / self.sample_mlp_ratio)
         x = self.drop_path(x)
 
+        # print("x.shape: ", x.shape)
+        # print("self.sample_embed_dim: ", self.sample_embed_dim[0])
+        # print("self.sample_out_dim: ", self.sample_out_dim[0])
+
         if isinstance(self.lln, LinearSuper):
             x = (
                 self.lln(
                     residual,
+                    # TODO:需要全部更改一下
+                    # sample_in_dim=self.sample_ffn_embed_dim_this_layer,
                     sample_in_dim=self.sample_embed_dim,
                     sample_out_dim=self.sample_out_dim,
                     token_length=self.token_length_after,
