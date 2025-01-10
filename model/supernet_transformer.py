@@ -104,8 +104,15 @@ def gelu(x: torch.Tensor) -> torch.Tensor:
     else:
         return x * 0.5 * (1.0 + torch.erf(x / math.sqrt(2.0)))
 
-
-class Vision_TransformerSuper(nn.Module):
+class DynamicLayer:
+    def __init__(self):
+        self.use_selector = False
+    
+    @property
+    def is_dynamic_model(self):
+        return self.use_selector
+    
+class Vision_TransformerSuper(nn.Module, DynamicLayer):
     def __init__(
         self,
         cfg,
@@ -130,9 +137,10 @@ class Vision_TransformerSuper(nn.Module):
         abs_pos=True,
         max_relative_position=14,
         mask_training=False,
-        token_mode_str='pruning'
+        token_mode_str='prune'
     ):
         super(Vision_TransformerSuper, self).__init__()
+        DynamicLayer.__init__(self)
 
         self.mask_training = mask_training
         self.token_mode = _map_token_mode(token_mode_str)
@@ -177,8 +185,9 @@ class Vision_TransformerSuper(nn.Module):
         
         self.decision_loc = decision_loc
 
-        for i in range(depth):
+        print("decision location (layer index)", decision_loc)
 
+        for i in range(depth):
             self.blocks.append(
                 TransformerEncoderLayer(
                     dim=embed_dim,
@@ -227,11 +236,6 @@ class Vision_TransformerSuper(nn.Module):
 
         # PPO initialization        
         self.selector = None
-        self.use_selector = False
-        
-    @property
-    def is_dynamic_model(self):
-        return self.use_selector
     
     @property
     def token_optim_mode(self):
@@ -301,7 +305,7 @@ class Vision_TransformerSuper(nn.Module):
             token_mode=self.token_optim_mode,
         )
 
-        self.eval()
+        self.selector.eval()
 
         choices = {
             "num_heads": self.cfg.SEARCH_SPACE.NUM_HEADS,
@@ -310,16 +314,10 @@ class Vision_TransformerSuper(nn.Module):
             "depth": self.cfg.SEARCH_SPACE.DEPTH,
         }
         self.choices = choices
-
-        sample_config = sample_configs(
-            choices=choices,
-            batch_size=batch_size,
-            sample_max=False,
-        )
+        sample_config = max_config(choices, batch_size)
         self.sample_config = sample_config
+
         self._sample_one_subnets(batch_size)
-        self.selector.actor.to(self.head.weight.device)
-        self.selector.critic.to(self.head.weight.device)
         self.enable_selector()
 
         if min_flag:
@@ -350,9 +348,9 @@ class Vision_TransformerSuper(nn.Module):
             print("Fixed structure selected.")
 
     def to(self, device):
-        super().to(device)
         if self.selector is not None:
             self.selector.to(device)
+        super().to(device)
     
     def _sample_one_subnets(self, batch_size):
         self.init_config = max_config(self.choices, batch_size)
@@ -491,7 +489,6 @@ class Vision_TransformerSuper(nn.Module):
         else:
             self.set_sample_config(config)
 
-        # TODO: 未完成
         x = self.patch_embed_super(
             x, self.sample_embed_dim[:, 0], batch_inference=self.is_batch_inference
         )
@@ -588,9 +585,6 @@ class Vision_TransformerSuper(nn.Module):
         self.original_token_idx = original_token_idx
         self.batch_config = config  # for testing
 
-        # TODO:待删除
-        # print("最终剩余的token比例为:", x.shape[1] / 197)
-
         return x[:, 0]
 
     def forward(self, x):
@@ -607,7 +601,7 @@ class Vision_TransformerSuper(nn.Module):
         return x
 
 
-class TransformerEncoderLayer(nn.Module):
+class TransformerEncoderLayer(nn.Module, DynamicLayer):
     """Encoder layer block.
 
     Args:
@@ -636,6 +630,7 @@ class TransformerEncoderLayer(nn.Module):
         linear_mapping_loc=None
     ):
         super().__init__()
+        DynamicLayer.__init__(self)
 
         # the configs of super arch of the encoder, three dimension [embed_dim, mlp_ratio, and num_heads]
         self.super_embed_dim = dim
@@ -682,8 +677,7 @@ class TransformerEncoderLayer(nn.Module):
         self.ffn_layer_norm = LayerNormSuper(self.super_embed_dim)
         # self.dropout = dropout
         self.activation_fn = gelu
-        # self.normalize_before = args.encoder_normalize_before
-
+        
         self.fc1 = LinearSuper(
             super_in_dim=self.super_embed_dim,
             super_out_dim=self.super_ffn_embed_dim_this_layer,
@@ -701,12 +695,7 @@ class TransformerEncoderLayer(nn.Module):
             self.lln = nn.Identity()
         
         self.decision_loc = decision_loc
-        self.use_selector = False
 
-    @property
-    def is_dynamic_model(self):
-        return self.use_selector
-    
     def set_sample_config(
         self,
         is_identity_layer,
@@ -757,6 +746,9 @@ class TransformerEncoderLayer(nn.Module):
             # Calculate the number of tokens to keep in each batch
             kept_number = (merge_granularity * token_length_before).astype(int)[0]
 
+            if kept_number == 0:
+                return lambda x, mode="mean": x, 0
+
             metric = metric / metric.norm(dim=-1, keepdim=True)
             unimportant_tokens_metric = metric[:, kept_number:]
 
@@ -774,6 +766,9 @@ class TransformerEncoderLayer(nn.Module):
             dst_idx = node_idx[..., None]
 
         def batch_merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
+            if kept_number == 0:
+                return x
+
             src = x[:, kept_number:]
             dst = x[:, :kept_number]
             n, t1, c = src.shape
@@ -950,9 +945,6 @@ class TransformerEncoderLayer(nn.Module):
             self.token_mask = token_mask
             self.token_size = token_size
 
-        # print("检查")
-        # print("self.id: ", self.id)
-
         residual = x
         x = self.maybe_layer_norm(
             self.attn_layer_norm,
@@ -1004,7 +996,6 @@ class TransformerEncoderLayer(nn.Module):
             # The dimension of cls_attn：[B, sample_num_heads, N, N]
             
             if self.is_dynamic_model:
-            
                 cls_attn = attn[:, :, 0, 1:]
                 cls_attn = cls_attn.mean(dim=1)  # [B, N-1]
                 _, idx = torch.sort(
@@ -1092,8 +1083,6 @@ class TransformerEncoderLayer(nn.Module):
         )
         residual = x
 
-        # print("residual.shape: ", residual.shape)
-
         x = self.maybe_layer_norm(
             self.ffn_layer_norm,
             x,
@@ -1126,16 +1115,10 @@ class TransformerEncoderLayer(nn.Module):
             x = x * (self.super_mlp_ratio / self.sample_mlp_ratio)
         x = self.drop_path(x)
 
-        # print("x.shape: ", x.shape)
-        # print("self.sample_embed_dim: ", self.sample_embed_dim[0])
-        # print("self.sample_out_dim: ", self.sample_out_dim[0])
-
         if isinstance(self.lln, LinearSuper):
             x = (
                 self.lln(
                     residual,
-                    # TODO:需要全部更改一下
-                    # sample_in_dim=self.sample_ffn_embed_dim_this_layer,
                     sample_in_dim=self.sample_embed_dim,
                     sample_out_dim=self.sample_out_dim,
                     token_length=self.token_length_after,

@@ -5,7 +5,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-
+from .utils import (
+    _map_token_mode, 
+    _check_is_token_merging, 
+    _check_is_token_pruning, 
+    _check_is_token_pruning_then_merging
+    )
 
 # Trick 8: Orthogonal initialization
 def orthogonal_init(layer, gain=1.0):
@@ -288,9 +293,9 @@ class PPO:
                         np.mean(action_record, axis=0)
                     )
 
-                    if self.token_mode == "prune" or self.token_mode == "merge":
+                    if _check_is_token_pruning(self.token_mode) or _check_is_token_merging(self.token_mode):
                         token_remain *= action_record[:, -1]
-                    elif self.token_mode == "prune_merge":
+                    elif _check_is_token_pruning_then_merging(self.token_mode):
                         token_remain *= action_record[:, -2]
                         token_remain *= action_record[:, -1]
 
@@ -329,11 +334,11 @@ class PPO:
                 acc_return += reward_list["acc"] / 4
                 flops_return += reward_list["flops"] / 4
 
-                if self.token_mode == "prune":
+                if _check_is_token_pruning(self.token_mode):
                     prune_return += reward_list["prune_rate"] / 4
-                elif self.token_mode == "merge":
+                elif _check_is_token_merging(self.token_mode):
                     merge_return += reward_list["merge_rate"] / 4
-                elif self.token_mode == "prune_merge":
+                elif _check_is_token_pruning_then_merging(self.token_mode):
                     prune_return += reward_list["prune_rate"] / 4
                     merge_return += reward_list["merge_rate"] / 4
 
@@ -347,11 +352,11 @@ class PPO:
             self.train_return_dict["total_return"].append(data_return)
             self.train_return_dict["acc"].append(acc_return)
             self.train_return_dict["flops"].append(flops_return)
-            if self.token_mode == "prune":
+            if _check_is_token_pruning(self.token_mode):
                 self.train_return_dict["prune"].append(prune_return)
-            elif self.token_mode == "merge":
+            elif _check_is_token_merging(self.token_mode):
                 self.train_return_dict["merge"].append(merge_return)
-            elif self.token_mode == "prune_merge":
+            elif _check_is_token_pruning_then_merging(self.token_mode):
                 self.train_return_dict["prune"].append(prune_return)
                 self.train_return_dict["merge"].append(merge_return)
 
@@ -434,9 +439,9 @@ class PPO:
                         config,
                         block_num=sample_id * 3,
                     )
-                    if self.token_mode == "prune" or self.token_mode == "merge":
+                    if _check_is_token_pruning(self.token_mode) or _check_is_token_merging(self.token_mode):
                         token_remain *= pre_action[:, -1]
-                    elif self.token_mode == "prune_merge":
+                    elif _check_is_token_pruning_then_merging(self.token_mode):
                         token_remain *= pre_action[:, -2]
                         token_remain *= pre_action[:, -1]
 
@@ -529,14 +534,14 @@ class PPO:
         config["embed_dim"][:, block_num : block_num + 3] = embed_choice
         ###############################################################
         # change compression rate
-        if self.token_mode == "prune":
+        if _check_is_token_pruning(self.token_mode):
             prune = action[:, -1]
             # prune = 0.5 + 0.5 * prune
             config["prune_granularity"][:, block_num] = prune
-        elif self.token_mode == "merge":
+        elif _check_is_token_merging(self.token_mode):
             merge = action[:, -1]
             config["merge_granularity"][:, block_num] = merge
-        elif self.token_mode == "prune_merge":
+        elif _check_is_token_pruning_then_merging(self.token_mode):
             prune = action[:, -2]
             merge = action[:, -1]
             config["prune_granularity"][:, block_num] = prune
@@ -565,19 +570,19 @@ class PPO:
             # Optimize samples that were incorrectly classified by the original ViT
             acc[acc == target_acc] = 1
 
-            if self.token_mode == "prune":
+            if _check_is_token_pruning(self.token_mode):
                 prune_rate = raw_action[:, -1] * prune_ratio
                 reward = acc - flops - prune_rate
 
                 re_list["prune_rate"] = prune_rate
 
-            elif self.token_mode == "merge":
+            elif _check_is_token_merging(self.token_mode):
                 merge_rate = raw_action[:, -1] * merge_ratio
                 reward = acc - flops - merge_rate
 
                 re_list["merge_rate"] = merge_rate
 
-            elif self.token_mode == "prune_merge":
+            elif _check_is_token_pruning_then_merging(self.token_mode):
                 prune_rate = raw_action[:, -2] * prune_ratio
                 merge_rate = raw_action[:, -1] * merge_ratio
                 reward = acc - flops - prune_rate - merge_rate

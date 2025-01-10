@@ -14,10 +14,10 @@ class ModelState(Enum):
 
 
 class TokenOptim(Enum):
-    _merging = 0
-    _pruning = 1
-    _pruning_then_merging = 2
-    _merging_then_pruning = 3
+    _merging = auto()
+    _pruning = auto()
+    _pruning_then_merging = auto()
+    _merging_then_pruning = auto()
 
 
 def _map_token_mode(mode):

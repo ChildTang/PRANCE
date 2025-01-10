@@ -468,12 +468,12 @@ def main(args):
     seq_length = args.input_size // args.patch_size * args.input_size // args.patch_size
     model.init_PPO_selector(
         args.batch_size,
-        state_dim=seq_length + 1,  # +1 for cls token
+        state_dim=seq_length+1,  # +1 for cls token
         max_flag=True,
     )
 
     model.to(device)
-
+    
     full_ppo_path = f"{args.ppo_path}/{args.ppo_name}"
     model.selector.load_model(path_name=full_ppo_path, file_name="")
     print("The PPO model is loaded from: ", full_ppo_path)
