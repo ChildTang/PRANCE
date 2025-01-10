@@ -440,7 +440,6 @@ def main(args):
     update_config_from_file(args.cfg)
 
     args_text = yaml.safe_dump(args.__dict__, default_flow_style=False)
-
     device = torch.device(args.device)
 
     print("Creating SuperVisionTransformer")
@@ -474,13 +473,10 @@ def main(args):
     )
 
     model.to(device)
-    model.selector.actor.to(device)
-    model.selector.critic.to(device)
 
-    # path_name = args.ppo_path
-    test_path = f"{args.ppo_path}/{args.ppo_name}"
-    model.selector.load_model(path_name=test_path, file_name="")
-    print("The PPO model is: ", test_path)
+    full_ppo_path = f"{args.ppo_path}/{args.ppo_name}"
+    model.selector.load_model(path_name=full_ppo_path, file_name="")
+    print("The PPO model is loaded from: ", full_ppo_path)
 
     model_ema = ModelEma(model=model, decay=0.99985, device="", resume="")
 
@@ -533,11 +529,13 @@ def main(args):
             drop_last=True,
         )
         model.eval()
+        model.selector.eval()
+
         print("*" * 60)
         print("Start evaluation!!!")
         print("*" * 60)
 
-        print(model.is_batch_inference, model.is_dynamic_model)
+        print('batch infer?', model.is_batch_inference, 'dynamic infer?', model.is_dynamic_model)
 
         batch_acc_list = []
         batch_flops_list = []

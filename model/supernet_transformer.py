@@ -300,8 +300,8 @@ class Vision_TransformerSuper(nn.Module):
             total_train_step,
             token_mode=self.token_optim_mode,
         )
-        self.selector.actor.eval()
-        self.selector.critic.eval()
+
+        self.eval()
 
         choices = {
             "num_heads": self.cfg.SEARCH_SPACE.NUM_HEADS,
@@ -349,6 +349,11 @@ class Vision_TransformerSuper(nn.Module):
             )
             print("Fixed structure selected.")
 
+    def to(self, device):
+        super().to(device)
+        if self.selector is not None:
+            self.selector.to(device)
+    
     def _sample_one_subnets(self, batch_size):
         self.init_config = max_config(self.choices, batch_size)
 

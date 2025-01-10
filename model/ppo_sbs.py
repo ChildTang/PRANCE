@@ -118,6 +118,18 @@ class PPO:
             "min": [],
         }
 
+    def to(self, device):
+        self.actor.to(device)
+        self.critic.to(device)
+    
+    def train(self):
+        self.actor.train()
+        self.critic.train()
+    
+    def eval(self):
+        self.actor.eval()
+        self.critic.eval()
+    
     def take_action(self, state, is_training=False):
         mu, sigma = self.actor(state)
 
