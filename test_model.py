@@ -12,7 +12,7 @@ from lib.datasets import build_dataset
 from lib import utils
 from lib.config import supernet_cfg, update_config_from_file
 from model.supernet_transformer import Vision_TransformerSuper
-from lib.dataloader import *
+# from lib.dataloader import *
 
 
 def get_args_parser():
@@ -522,22 +522,22 @@ def main(args):
 
     # model eval
     if args.eval:
-        torch_loader = True
-        if torch_loader:
-            dataset_val, _ = build_dataset(is_train=False, args=args)
-            sampler_val = torch.utils.data.SequentialSampler(dataset_val)
-            data_loader_val = torch.utils.data.DataLoader(
-                dataset_val,
-                batch_size=int(args.batch_size),
-                sampler=sampler_val,
-                num_workers=args.num_workers,
-                pin_memory=args.pin_mem,
-                drop_last=True,
-            )
+        dataset_val, _ = build_dataset(is_train=False, args=args)
+        sampler_val = torch.utils.data.SequentialSampler(dataset_val)
+        data_loader_val = torch.utils.data.DataLoader(
+            dataset_val,
+            batch_size=int(args.batch_size),
+            sampler=sampler_val,
+            num_workers=args.num_workers,
+            pin_memory=args.pin_mem,
+            drop_last=True,
+        )
         model.eval()
         print("*" * 60)
         print("Start evaluation!!!")
         print("*" * 60)
+
+        print(model.is_batch_inference, model.is_dynamic_model)
 
         batch_acc_list = []
         batch_flops_list = []
@@ -547,7 +547,7 @@ def main(args):
         for images, target in data_loader_val:
             images = images.to(device, non_blocking=True)
             target = target.to(device, non_blocking=True)
-            # compute output
+
             with torch.cuda.amp.autocast():
                 output = model(images)
 
@@ -599,10 +599,6 @@ if __name__ == "__main__":
         "Prance training and evaluation script", parents=[get_args_parser()]
     )
     args = parser.parse_args()
-
-    # need to be changed
-    args.data_path = "/home/bingxing2/public/imagenet2012/ImageNet_ILSVRC2012"
-
     args.output_dir = args.output_dir + "/" + args.ppo_name
 
     args.resume = args.output_dir + "/checkpoint.pth"

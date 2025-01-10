@@ -4,7 +4,7 @@
 
 This is the official implementation of PRANCE.
 
-**Abstract:** We introduce PRANCE, a Vision Transformer compression framework that jointly optimizes the activated channels and reduces tokens, based on the characteristics of inputs. Specifically, PRANCE leverages adaptive token optimization strategies for a certain computational budget, aiming to accelerate ViTs' inference from a unified data and architectural perspective. However, the joint framework poses challenges to both architectural and decision-making aspects. Firstly, while ViTs inherently support variable-token inference, they do not facilitate dynamic computations for variable channels. To overcome this limitation, we propose a meta-network using weight-sharing techniques to support arbitrary channels of the Multi-head Self-Attention and Multi-layer Perceptron layers, serving as a foundational model for architectural decision-making. Second, simultaneously optimizing the structure of the meta-network and input data constitutes a combinatorial optimization problem with an extremely large decision space, reaching up to around 1014, making supervised learning infeasible. To this end, we design a lightweight selector employing Proximal Policy Optimization for efficient decision-making. Furthermore, we introduce a novel "Result-to-Go" training mechanism that models ViTs' inference process as a Markov decision process, significantly reducing action space and mitigating delayed-reward issues during training. Extensive experiments demonstrate the effectiveness of PRANCE in reducing FLOPs by approximately 50%, retaining only about 10% of tokens while achieving lossless Top-1 accuracy. Additionally, our framework is shown to be compatible with various token optimization techniques such as pruning, merging, and sequential pruning-merging strategies.
+**Abstract:** We introduce PRANCE, a Vision Transformer compression framework that jointly optimizes the activated channels (dynamic channel pruning) and reduces tokens (dynamic token pruning (or) merging (or) pruning-then-merging), based on the characteristics of inputs. PRANCE leverages adaptive token optimization strategies for a certain computational budget, aiming to accelerate ViTs' inference from a unified data and architectural perspective. PRANCE can reduces FLOPs by approximately 50%, retaining only about 10% of tokens while achieving lossless Top-1 accuracy. 
 
 ## 1. Cloning the Repository
 
@@ -14,7 +14,7 @@ git clone https://github.com/ChildTang/PRANCE.git
 
 ## 2. Setup
 
-You can use the following command to setup the training/evaluation environment:
+- You can use the following command to setup the training/evaluation environment:  
 
 ```
 conda create -n prance python=3.9
@@ -22,7 +22,13 @@ conda activate prance
 pip install -r requirements.txt
 ```
 
-We use the ImageNet dataset at http://www.image-net.org/. The training set is moved to /path_to_imagenet/imagenet/train and the validation set is moved to /path_to_imagenet/imagenet/val:
+- Install the NVIDIA-dali framework (for training): 
+https://github.com/NVIDIA/DALI?tab=readme-ov-file#installing-dali
+
+
+
+## 3. Data
+- We use the ImageNet dataset at http://www.image-net.org/. The training set is moved to /path_to_imagenet/imagenet/train and the validation set is moved to /path_to_imagenet/imagenet/val:
 
 ```
 /path_to_imagenet/imagenet/
@@ -44,13 +50,12 @@ We use the ImageNet dataset at http://www.image-net.org/. The training set is mo
     ...
 ```
 
-The checkpiont of meta-network and PPO selector can be download at:
+## 4. Pretrained Weights
+Download the pretrained checkpionts of meta-network and PPO selector:
 
-```
 https://huggingface.co/childtang/PRANCE/tree/main
-```
 
-The structure is as follows:
+The overall structure of the project is as follows:
 
 ```
 checkpoints/
@@ -86,12 +91,16 @@ checkpoints/
         prune-then-merge/
 ```
 
-## 3. Usage
-### Train
+## 5. Usage
+### Training
+
+This part will be released soon. 
+
+### Finetuning
 
 This part will be released soon.
 
-### Test
+### Testing
 
 You can test the model by running the test.sh, and change the settings in the test.sh file as you need:
 

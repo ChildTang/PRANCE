@@ -2,6 +2,7 @@
 
 export PYTHONUNBUFFERED=1
 
+data_path="PATH_TO_IMAGENET"
 ###################################################################################
 # prune
 # tiny 
@@ -109,5 +110,4 @@ token_mode="prune"
 # token_mode="prune_merge"
 ###################################################################################
 
-python -u test_model.py --output_dir $output_name --ppo_path $ppo_path --ppo_name $ppo --cfg $cfg --token_mode $token_mode --num_workers 8 --batch-size $batch_size
-# python -u test_model.py --output_dir $output_name --ppo_path $ppo_path --ppo_name $ppo --cfg $cfg --token_mode $token_mode --num_workers 8 --batch-size $batch_size --batch-inference
+python -u test_model.py --output_dir $output_name --ppo_path $ppo_path --ppo_name $ppo --cfg $cfg --token_mode $token_mode --num_workers 8 --batch-size $batch_size --data-path $data_path --batch-inference
